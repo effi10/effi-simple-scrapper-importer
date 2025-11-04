@@ -35,45 +35,12 @@ effiSimplyScrapperImporter/
         └── Parsedown.php             # Bibliothèque Parsedown
 ```
 
-## 🚀 Installation
-
-### Étape 1 : Télécharger Parsedown
-
-Le plugin nécessite la bibliothèque Parsedown pour convertir le Markdown en HTML.
-
-```bash
-# Créer le dossier vendor
-mkdir -p vendor/parsedown
-
-# Télécharger Parsedown (version 1.7.4)
-cd vendor/parsedown
-wget https://raw.githubusercontent.com/erusev/parsedown/master/Parsedown.php
-```
-
-**Ou manuellement :**
-1. Téléchargez `Parsedown.php` depuis : https://github.com/erusev/parsedown/blob/master/Parsedown.php
-2. Placez-le dans `vendor/parsedown/Parsedown.php`
-
-### Étape 2 : Installer le Plugin
-
-1. **Téléversement via WordPress :**
-   - Compressez le dossier `effiSimplyScrapperImporter` en `.zip`
-   - Dans WordPress : Extensions > Ajouter > Téléverser
-   - Sélectionnez le fichier `.zip` et activez
-
-2. **Installation manuelle (FTP) :**
-   - Copiez le dossier dans `/wp-content/plugins/`
-   - Activez depuis Extensions > Extensions installées
-
-### Étape 3 : Vérification
-
-Après activation, vous devriez voir **"SimplyScrapper Importer"** dans le menu **Outils** de l'administration WordPress.
 
 ## 📖 Utilisation
 
 ### Format des Fichiers Markdown
 
-Les fichiers `.md` doivent respecter le format SimplyScrapper :
+Les fichiers `.md` doivent respecter le format SimplyScrapper (et doivent être encodés en UTF 8):
 
 ```markdown
 # [Titre de l'article](https://example.com/blog/slug-article-n105)
@@ -203,6 +170,10 @@ update_post_meta($post_id, 'import_date', current_time('mysql'));
 ### Blocs mal formatés
 
 **Solution :** Le contenu Markdown peut contenir des balises HTML non standard. Vérifiez vos fichiers sources.
+
+### Erreur d'importation
+
+**Solution :** Vérifier que les fichiers à importer soient bien encodés en UTF 8 (typiquement l'UTF 16 provoque des anomalies/erreurs de type "titre trop long" et importe uniquement le premier bloc avec un espace entre chaque caractère)
 
 ## 📝 Changelog
 
