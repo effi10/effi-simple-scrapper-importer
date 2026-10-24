@@ -1,46 +1,35 @@
 # effiSimplyScrapperImporter
 
-Plugin WordPress professionnel pour importer des contenus Markdown issus de SimplyScrapper avec conversion automatique en blocs Gutenberg natifs.
+Extension WordPress qui transforme des fichiers Markdown exportés par l'outil de scraping SimplyScrapper en articles WordPress composés de blocs Gutenberg natifs. Le slug d'origine est conservé, l'image à la une peut être retrouvée par son numéro et les images peuvent, si vous le souhaitez, être copiées dans la médiathèque.
 
-## 📋 Fonctionnalités
+- **Auteur :** [Cédric Girard](https://www.effi10.com/) (effi10)
+- **Version :** 1.1.0
+- **Prérequis :** WordPress 6.6 ou plus récent, PHP 8.1 ou plus récent (testé avec PHP 8.2, 8.3 et 8.5)
+- **Licence :** GPL-2.0-or-later
 
-- ✅ Import par lot de fichiers Markdown (.md)
-- ✅ Conversion automatique en blocs Gutenberg natifs (pas de bloc HTML personnalisé)
-- ✅ Extraction intelligente du titre et du slug depuis les métadonnées SimplyScrapper
-- ✅ **Rattachement automatique des images à la une par numérotation**
-- ✅ Traitement asynchrone via AJAX avec barre de progression en temps réel
-- ✅ Gestion optimale de la mémoire (traitement séquentiel)
-- ✅ Choix du statut des articles (Brouillon ou Publié)
-- ✅ Interface administrateur intuitive et responsive
-- ✅ Gestion complète des erreurs avec rapports détaillés
+> **Droits d'auteur :** n'importez que des contenus et des images que vous avez le droit de réutiliser (vos propres sites, contenus sous licence compatible ou avec l'autorisation écrite de leur auteur). L'extension ne vérifie pas ces droits à votre place.
 
-## 📦 Structure du Plugin
+## À quoi sert cette extension
 
-```
-effiSimplyScrapperImporter/
-├── effiSimplyScrapperImporter.php    # Fichier principal
-├── README.md                          # Documentation
-├── assets/
-│   ├── css/
-│   │   └── admin.css                 # Styles de l'interface
-│   └── js/
-│       └── admin.js                  # Script AJAX et progression
-├── includes/
-│   ├── class-parsedown-loader.php    # Chargeur Parsedown
-│   ├── class-markdown-parser.php     # Parser de fichiers MD
-│   ├── class-gutenberg-converter.php # Convertisseur en blocs
-│   └── class-importer.php            # Gestionnaire d'import
-└── vendor/
-    └── parsedown/
-        └── Parsedown.php             # Bibliothèque Parsedown
-```
+Elle sert à reprendre rapidement des pages déjà rédigées (migration d'un ancien site vers WordPress, consolidation de plusieurs sites, récupération de vos propres contenus) sans copier-coller ni retouche manuelle des blocs :
 
+- chaque fichier `.md` devient un article ;
+- le titre et le slug d'origine sont repris tels quels, ce qui facilite la conservation des URL et les redirections ;
+- le contenu est découpé en blocs natifs (titres, paragraphes, listes, citations, code, tableaux, images, séparateurs) et reste donc entièrement modifiable dans l'éditeur.
 
-## 📖 Utilisation
+## Fonctionnalités
 
-### Format des Fichiers Markdown
+- Import de plusieurs fichiers en une fois, traités **l'un après l'autre** (une requête par fichier, avec barre de progression) pour éviter les dépassements de mémoire et de délai.
+- Conversion en blocs natifs conformes au balisage de l'éditeur de WordPress 6.6 et suivants.
+- Statut au choix : **brouillon (par défaut)**, en attente de relecture ou publié.
+- **Détection des doublons de slug** : par défaut le fichier est ignoré et signalé ; vous pouvez aussi choisir de l'importer quand même (WordPress ajoutera alors un suffixe au slug lors de la publication).
+- **Image à la une par numérotation** (facultatif) : `mon-article-c123` utilise l'image `123.jpg` déjà présente dans la médiathèque.
+- **Import des images dans la médiathèque** (facultatif, désactivé par défaut).
+- Compte rendu détaillé : articles créés (avec lien de modification), fichiers ignorés, échecs et avertissements.
 
-Les fichiers `.md` doivent respecter le format SimplyScrapper (et doivent être encodés en UTF 8):
+## Format attendu des fichiers
+
+Les fichiers doivent avoir l'extension `.md`, être encodés en **UTF-8** et peser au plus 2 Mo (limite modifiable, voir plus bas). Les fichiers UTF-16 avec BOM (« Unicode » du Bloc-notes de Windows) sont convertis automatiquement ; les autres encodages sont refusés avec un message explicite.
 
 ```markdown
 # [Titre de l'article](https://example.com/blog/slug-article-n105)
@@ -52,176 +41,135 @@ Le contenu commence ici...
 Contenu de la section...
 ```
 
-**Important :**
-- **Ligne 1** : Titre entre crochets avec lien
-- **Ligne 2** : URL complète (utilisée pour extraire le slug)
-- **Ligne 3+** : Contenu Markdown standard
+- **Ligne 1 :** le titre, sous la forme `# [Titre](URL)` (la forme `# Titre` est aussi acceptée).
+- **Ligne 2 :** l'URL complète de la page source, entre tirets bas. Son dernier segment devient le slug (`slug-article-n105`). La chaîne de requête, l'ancre, une barre oblique finale et une extension `.html`, `.htm`, `.php`, `.asp` ou `.aspx` sont ignorées. Si cette ligne est absente, le lien du titre est utilisé, sinon le slug est calculé à partir du titre.
+- **Lignes suivantes :** le contenu, en Markdown standard.
 
-### Processus d'Import
+Un exemple complet et fictif est fourni dans [`examples/exemple-article.md`](examples/exemple-article.md).
 
-1. **Accédez à l'importeur :**
-   - Outils > SimplyScrapper Importer
+## Installation
 
-2. **Sélectionnez vos fichiers :**
-   - Cliquez sur le sélecteur de fichiers
-   - Choisissez un ou plusieurs fichiers `.md`
-   - Le nombre de fichiers sélectionnés s'affiche
+1. Téléchargez l'archive depuis GitHub (bouton **Code > Download ZIP** ou page des versions).
+2. Dans WordPress : **Extensions > Ajouter > Téléverser une extension**, choisissez l'archive, puis activez l'extension.
+   Vous pouvez aussi copier le dossier dans `wp-content/plugins/`.
+3. Si le dossier s'appelle `effi-simple-scrapper-importer-main` (archive GitHub), renommez-le de préférence en `effi-simple-scrapper-importer` avant l'activation.
 
-3. **Choisissez le statut :**
-   - **Brouillon** : Pour révision avant publication
-   - **Publié** : Publication immédiate
+Les mises à jour se font manuellement depuis GitHub : l'en-tête `Update URI` empêche WordPress.org de proposer par erreur la mise à jour d'une autre extension portant le même nom de dossier.
 
-4. **Rattachement des images (optionnel) :**
-   - ✅ Cochez "Rattacher les photos par numérotation" pour activer le rattachement automatique
-   - Le système cherchera une image nommée avec le numéro du slug (ex: `123.jpg` pour `article-c123`)
-   - Voir la documentation complète dans `FONCTIONNALITE-RATTACHEMENT-IMAGES.md`
+## Utilisation
 
-5. **Lancez l'import :**
-   - Cliquez sur "Importer"
-   - Une barre de progression affiche l'avancement en temps réel
-   - Les résultats s'affichent à la fin (succès/échecs)
+1. Ouvrez **Outils > SimplyScrapper Importer** (réservé par défaut aux administrateurs).
+2. Sélectionnez un ou plusieurs fichiers `.md`.
+3. Choisissez les options :
+   - **Statut des articles :** brouillon (recommandé, pour relire avant publication), en attente de relecture ou publié ;
+   - **Si le slug existe déjà :** ignorer le fichier (recommandé) ou l'importer quand même ;
+   - **Rattacher l'image à la une par numérotation :** si le slug se termine par un numéro (`-123`, `-c123`, `-n123`...), l'image dont le nom de fichier est exactement `123.jpg`, `123.jpeg`, `123.png`, `123.gif`, `123.webp` ou `123.avif` (téléversée au préalable dans la médiathèque) devient l'image à la une ;
+   - **Importer les images dans la médiathèque :** voir « Images » ci-dessous.
+4. Cliquez sur **Importer** et suivez la progression. Le compte rendu final liste chaque fichier.
 
-### Conversion en Blocs Gutenberg
+## Conversion en blocs
 
-Le plugin convertit automatiquement :
-
-| Markdown | Bloc Gutenberg |
+| Markdown | Bloc WordPress |
 |----------|----------------|
-| `# Titre` à `###### Titre` | Bloc Titre (niveaux 1-6) |
-| Paragraphes | Bloc Paragraphe |
-| `- Liste` / `* Liste` | Bloc Liste à puces |
-| `1. Liste` | Bloc Liste numérotée |
-| `> Citation` | Bloc Citation |
-| `` `code` `` / ```code``` | Bloc Code |
-| `![alt](url)` | Bloc Image |
-| Liens `[texte](url)` | Liens natifs dans les blocs |
+| `# Titre` à `###### Titre` | Titre (niveaux 1 à 6) |
+| Paragraphes, **gras**, *italique*, `code en ligne`, liens | Paragraphe |
+| `- élément` / `1. élément`, y compris imbriqués | Liste (avec éléments de liste) |
+| `> citation` | Citation |
+| Bloc de code entre ```` ``` ```` | Code |
+| Tableau avec `\|` (alignements compris) | Tableau |
+| `![texte alternatif](url)` seul sur sa ligne | Image (avec lien éventuel) |
+| `---` | Séparateur |
+| `<div>` et conteneurs HTML simples | Contenu converti en blocs |
+| Autre HTML brut (vidéo, formulaire...) | HTML personnalisé (s'il survit au filtrage) |
 
-**Tous les blocs sont natifs Gutenberg**, pas de blocs HTML personnalisés !
+Le Markdown est interprété par [Parsedown](https://github.com/erusev/parsedown) 1.6.0, embarquée sous un nom de classe propre à l'extension (`EFFISSI_Parsedown`) pour ne jamais entrer en conflit avec une autre extension qui charge sa propre version de Parsedown.
 
-## ⚙️ Architecture Technique
+## Images
 
-### Gestion de la Mémoire
+- **Option décochée (par défaut) :** les images restent chargées depuis le site source. Elles disparaîtront si ce site les supprime, change d'adresse ou bloque le chargement depuis un autre domaine. Les images relatives (`/images/photo.jpg`) sont transformées en adresses absolues vers le site source.
+- **Option cochée :** les images sont téléchargées et ajoutées à la médiathèque, rattachées à l'article, puis le contenu pointe vers la copie locale. Garde-fous :
+  - adresses `http`/`https` uniquement, téléchargées via l'API HTTP de WordPress (adresses locales et privées refusées) ;
+  - 10 images au plus par article et 5 Mo au plus par image (plafonnés par la limite de téléversement du serveur) ;
+  - type réel vérifié sur le contenu du fichier : JPEG, PNG, GIF, WebP ou AVIF (le SVG est refusé) ;
+  - une image déjà importée depuis la même adresse est réutilisée au lieu d'être dupliquée ;
+  - les images refusées ou en échec restent liées au site source et sont signalées dans le compte rendu.
+- Les images servant d'image à la une par numérotation doivent être téléversées vous-même dans la médiathèque avant l'import.
 
-Le plugin utilise un **traitement séquentiel** pour éviter les dépassements de mémoire :
+## Sécurité
 
-1. Les fichiers sont envoyés **un par un** au serveur via AJAX
-2. Chaque fichier est traité complètement avant de passer au suivant
-3. Aucun stockage massif en mémoire
+- Page et requêtes d'import réservées aux utilisateurs ayant la capacité `manage_options` (modifiable par filtre) ; nonce vérifié à chaque requête.
+- Fichiers téléversés contrôlés : téléversement réel, extension `.md`, taille, type MIME réel de type texte, encodage UTF-8. Le fichier est lu depuis le dossier temporaire de PHP, jamais copié dans un dossier public, puis supprimé.
+- Le contenu provenant d'un site tiers est **toujours filtré par `wp_kses_post()`**, y compris pour les administrateurs : scripts, styles, iframes, attributs d'événement et liens `javascript:` sont supprimés. Un développeur peut lever ce filtrage pour les utilisateurs disposant de `unfiltered_html` (filtre `effissi_allow_unfiltered_html`). Les balises `<script>`, `<style>` et les commentaires HTML sont supprimés dans tous les cas.
+- Les articles sont créés avec `wp_insert_post( wp_slash( $data ), true )` et les erreurs sont remontées dans le compte rendu.
 
-### Performance
+## Limites
 
-- **Fichiers de 5 Ko** : ~0.5 seconde par fichier
-- **100 fichiers** : ~50 secondes d'import total
-- **Aucun timeout** grâce au traitement asynchrone
-- **Timeout par fichier** : 60 secondes (configurable dans `admin.js`)
+- Seul le type de contenu « article » (`post`) est créé ; catégories, étiquettes, auteur et date d'origine ne sont pas repris (l'article est attribué à l'utilisateur qui importe, catégorie par défaut, date du jour).
+- Les liens présents dans le contenu pointent toujours vers le site source : pensez à les mettre à jour et à prévoir vos redirections.
+- Syntaxe Markdown prise en charge : celle de Parsedown 1.6.0 (Markdown classique et tableaux). Les notes de bas de page, listes de tâches et autres extensions « Markdown Extra » ne sont pas converties.
+- Un élément de liste ne peut pas contenir de bloc (code, citation) : seul son texte est conservé.
+- Le format d'entrée est celui de SimplyScrapper : un fichier structuré autrement devra être adapté (voir `includes/class-markdown-parser.php`).
+- Le balisage produit suit l'éditeur de WordPress 6.6 et suivants ; sur une version plus ancienne, l'éditeur peut proposer de « récupérer » certains blocs.
+- Avec l'import des images, un fichier peut demander plusieurs dizaines de secondes : sur un hébergement limité, importez de petits lots.
 
-### Sécurité
+## Pour les développeurs
 
-- ✅ Vérification des nonces AJAX
-- ✅ Vérification des capacités utilisateur (`manage_options`)
-- ✅ Validation des extensions de fichiers (`.md` uniquement)
-- ✅ Échappement de toutes les sorties HTML
-- ✅ Protection contre l'accès direct aux fichiers PHP
+| Crochet | Type | Rôle |
+|---------|------|------|
+| `effissi_required_capability` | filtre | Capacité requise (défaut : `manage_options`). |
+| `effissi_max_file_size` | filtre | Taille maximale d'un fichier `.md`, en octets (défaut : 2 Mo). |
+| `effissi_max_image_size` | filtre | Taille maximale d'une image importée, en octets (défaut : 5 Mo). |
+| `effissi_max_images_per_post` | filtre | Nombre maximal d'images téléchargées par article (défaut : 10). |
+| `effissi_allow_unfiltered_html` | filtre | `true` pour ne pas filtrer le HTML si l'utilisateur a `unfiltered_html` (défaut : `false`). |
+| `effissi_post_data` | filtre | Données passées à `wp_insert_post()` (type de contenu, catégorie, etc.). |
+| `effissi_post_imported` | action | Après la création d'un article : `( $post_id, $data, $options )`. |
 
-## 🔧 Configuration Avancée
-
-### Modifier le Timeout AJAX
-
-Dans `assets/js/admin.js`, ligne 137 :
-
-```javascript
-timeout: 60000, // 60 secondes (60000 ms)
-```
-
-### Personnaliser les Types de Blocs
-
-Modifiez `includes/class-gutenberg-converter.php`, méthode `node_to_block()` pour ajouter des conversions personnalisées.
-
-### Ajouter des Métadonnées
-
-Dans `includes/class-importer.php`, méthode `create_post()` :
+Exemple : ajouter une méta et une catégorie à chaque article importé.
 
 ```php
-// Ajouter des termes de taxonomie
-wp_set_post_terms($post_id, array('Non classé'), 'category');
-
-// Ajouter des meta données personnalisées
-update_post_meta($post_id, 'imported_from', 'SimplyScrapper');
-update_post_meta($post_id, 'import_date', current_time('mysql'));
+add_action( 'effissi_post_imported', function ( $post_id, $data ) {
+	update_post_meta( $post_id, 'source_url', esc_url_raw( $data['source_url'] ) );
+	wp_set_post_categories( $post_id, array( 12 ), true );
+}, 10, 2 );
 ```
 
-## 🐛 Dépannage
+## Désinstallation
 
-### Erreur : "Parsedown non trouvé"
+L'extension n'enregistre aucune option. À la suppression, elle efface seulement la méta technique `_effissi_source_url` des images importées (les images et les articles sont conservés) et le dossier vide `uploads/effisimplyscrapper` créé par les versions 1.0.x.
 
-**Solution :** Vérifiez que `vendor/parsedown/Parsedown.php` existe.
+## Note sur le nom
 
-### Erreur : "Format de fichier invalide"
+Le nom n'est pas homogène : dépôt `effi-simple-scrapper-importer`, fichier principal `effi-simply-scrapper-importer.php`, nom affiché `effiSimplyScrapperImporter`, outil source « SimplyScrapper » (en anglais, « scraper » s'écrit avec un seul p). Les fichiers et dossiers ne sont volontairement pas renommés : WordPress identifie une extension par son chemin `dossier/fichier-principal.php`, et un renommage la désactiverait sur les sites où elle est déjà installée.
 
-**Solution :** Assurez-vous que vos fichiers `.md` respectent le format avec les 2 premières lignes de métadonnées.
+## Crédits et licence
 
-### Import qui se bloque
+- Extension distribuée sous licence GPL version 2 ou ultérieure : voir [`LICENSE`](LICENSE).
+- Parsedown 1.6.0, © Emanuil Rusev, licence MIT : voir [`vendor/parsedown/LICENSE.txt`](vendor/parsedown/LICENSE.txt). Les modifications apportées à cette copie (renommage de la classe, compatibilité PHP 8.4+) sont décrites en tête de `vendor/parsedown/Parsedown.php`.
 
-**Solution :** 
-1. Vérifiez les logs PHP (erreurs de mémoire)
-2. Augmentez `memory_limit` dans `php.ini` (recommandé : 256M)
-3. Réduisez le nombre de fichiers par lot
+## Journal des versions
 
-### Blocs mal formatés
+### 1.1.0 (2026-10-24)
 
-**Solution :** Le contenu Markdown peut contenir des balises HTML non standard. Vérifiez vos fichiers sources.
+- **Correction critique :** la copie de Parsedown déclarait la classe globale `Parsedown` en se présentant comme la version 1.7.4 ; une erreur fatale survenait si une autre extension chargeait Parsedown. Il s'agissait en fait d'une réécriture simplifiée et défaillante (images transformées en liens, blocs de code et tableaux non reconnus, listes imbriquées aplaties, avertissements PHP 8). Elle est remplacée par Parsedown 1.6.0 sous le nom préfixé `EFFISSI_Parsedown`, avec sa licence MIT.
+- Conversion en blocs réécrite : listes avec blocs « élément de liste » et listes imbriquées, citations avec blocs internes, tableaux natifs avec alignements, images avec lien et légende, codes courts neutralisés dans les blocs de code, images relatives rendues absolues.
+- Sécurité : contenu filtré par `wp_kses_post()`, scripts et commentaires HTML supprimés, contrôles complets du fichier téléversé (type MIME réel, taille, encodage), fichier temporaire supprimé, `wp_slash()` avant `wp_insert_post()` (les antislashs du contenu sont préservés), statut par défaut « brouillon » imposé côté serveur.
+- Nouveau : détection et signalement des doublons de slug, statut « en attente de relecture », import facultatif des images dans la médiathèque, compte rendu détaillé avec liens de modification.
+- Image à la une par numérotation : recherche exacte du nom de fichier (`123.jpg` ne correspond plus à `4123.jpg`), prise en charge des images « -scaled » et du format AVIF.
+- Encodage : BOM UTF-8 retiré, UTF-16 avec BOM converti, fichiers non UTF-8 refusés avec un message clair.
+- Le dossier vide `uploads/effisimplyscrapper` n'est plus créé à l'activation ; ajout de `uninstall.php`.
+- Textes de l'interface traduisibles (domaine `effi-simple-scrapper-importer`), en-tête d'extension complet, fichier `LICENSE`, README réécrit.
+- Exemple de test remplacé par un exemple fictif (`examples/exemple-article.md`).
 
-### Erreur d'importation
+### 1.0.2 (2025-10-28)
 
-**Solution :** Vérifier que les fichiers à importer soient bien encodés en UTF 8 (typiquement l'UTF 16 provoque des anomalies/erreurs de type "titre trop long" et importe uniquement le premier bloc avec un espace entre chaque caractère)
+- Rattachement automatique de l'image à la une par numérotation du slug.
 
-## 📝 Changelog
+### 1.0.1 (2025-10-28)
 
-### Version 1.0.2 (2025-10-28)
-- ✨ **Nouvelle fonctionnalité** : Rattachement automatique des images à la une
-  - Ajout d'une case à cocher "Rattacher les photos par numérotation"
-  - Extraction automatique du numéro depuis le slug (ex: `article-c123` → `123`)
-  - Recherche d'image dans la bibliothèque média par numéro (ex: `123.jpg`)
-  - Support de 5 formats d'image (jpg, jpeg, png, gif, webp)
-  - Définition automatique comme image à la une si trouvée
-- 📄 Documentation complète dans `FONCTIONNALITE-RATTACHEMENT-IMAGES.md`
+- Correction de l'import incomplet du contenu (analyse DOM, nœuds texte orphelins).
+- Conservation exacte du slug d'origine.
+- Prise en charge des séparateurs et des tableaux.
 
-### Version 1.0.1 (2025-10-28)
-- 🐛 **Correction majeure** : Import incomplet du contenu résolu
-  - Amélioration du parsing DOM pour capturer tous les éléments HTML
-  - Ajout de la gestion des nœuds texte orphelins
-  - Enveloppe HTML pour une structure cohérente
-- 🐛 **Correction** : Préservation exacte du slug d'origine
-  - Le slug WordPress correspond maintenant exactement au slug de l'URL d'origine
-  - Suppression de la logique de troncature des suffixes `-nXXX`
-- ✨ **Améliorations** :
-  - Support des séparateurs (`<hr>`)
-  - Support des tableaux (`<table>`)
-- 📄 Documentation complète des corrections dans `CORRECTIONS.md`
-- 🧪 Fichiers de test fournis : `test-article.md` et `test-slug-exact.md`
+### 1.0.0 (2025-10-22)
 
-### Version 1.0.0 (2025-10-22)
-- ✨ Version initiale
-- ✅ Import par lot avec AJAX
-- ✅ Conversion en blocs Gutenberg natifs
-- ✅ Interface administrateur complète
-- ✅ Barre de progression temps réel
-
-## 🤝 Support
-
-Pour toute question ou problème :
-1. Vérifiez cette documentation
-2. Consultez les logs WordPress (`wp-content/debug.log`)
-3. Contactez le support technique
-
-## 📄 Licence
-
-Ce plugin est sous licence GPL v2 ou ultérieure.
-
-## 👨‍💻 Développeur
-
-Développé avec ❤️ pour faciliter la migration de contenus SimplyScrapper vers WordPress.
-
----
-
-**Note importante :** Ce plugin a été conçu spécifiquement pour le format de sortie de SimplyScrapper. Si votre format diffère, des adaptations peuvent être nécessaires dans `class-markdown-parser.php`.
+- Version initiale : import par lot avec AJAX, conversion en blocs, barre de progression.
