@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       effiSimplyScrapperImporter
+ * Plugin Name:       effi SimplyScrapper Importer
  * Plugin URI:        https://github.com/effi10/effi-simple-scrapper-importer
  * Description:       Importe des fichiers Markdown issus de SimplyScrapper sous forme d'articles WordPress en blocs Gutenberg natifs : slug d'origine conservé, image à la une retrouvée par numéro, images importables dans la médiathèque.
  * Version:           1.1.0

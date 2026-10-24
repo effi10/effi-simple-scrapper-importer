@@ -1,4 +1,4 @@
-# effiSimplyScrapperImporter
+# effi SimplyScrapper Importer
 
 Extension WordPress qui transforme des fichiers Markdown exportés par l'outil de scraping SimplyScrapper en articles WordPress composés de blocs Gutenberg natifs. Le slug d'origine est conservé, l'image à la une peut être retrouvée par son numéro et les images peuvent, si vous le souhaitez, être copiées dans la médiathèque.
 
