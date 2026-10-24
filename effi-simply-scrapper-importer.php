@@ -1,265 +1,327 @@
 <?php
 /**
- * Plugin Name: effiSimplyScrapperImporter
- * Description: Importe des contenus Markdown issus de SimplyScrapper vers WordPress avec conversion en blocs Gutenberg natifs
- * Version: 1.0.2
- * Author: Cédric GIRARD
- * Author URI: https://www.effi10.com
- * License: GPL v2 or later
- * Text Domain: effisimplyscrapper
- * Domain Path: /languages
+ * Plugin Name:       effiSimplyScrapperImporter
+ * Plugin URI:        https://github.com/effi10/effi-simple-scrapper-importer
+ * Description:       Importe des fichiers Markdown issus de SimplyScrapper sous forme d'articles WordPress en blocs Gutenberg natifs : slug d'origine conservé, image à la une retrouvée par numéro, images importables dans la médiathèque.
+ * Version:           1.1.0
+ * Requires at least: 6.6
+ * Requires PHP:      8.1
+ * Author:            Cédric Girard
+ * Author URI:        https://www.effi10.com/
+ * License:           GPL-2.0-or-later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       effi-simple-scrapper-importer
+ * Update URI:        https://github.com/effi10/effi-simple-scrapper-importer
+ *
+ * @package EffiSimplyScrapperImporter
  */
 
-// Sécurité : empêcher l'accès direct
-if (!defined('ABSPATH')) {
-    exit;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
-// Définir les constantes du plugin
-define('EFFISSI_VERSION', '1.0.2');
-define('EFFISSI_PLUGIN_DIR', plugin_dir_path(__FILE__));
-define('EFFISSI_PLUGIN_URL', plugin_dir_url(__FILE__));
+define( 'EFFISSI_VERSION', '1.1.0' );
+define( 'EFFISSI_PLUGIN_FILE', __FILE__ );
+define( 'EFFISSI_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+define( 'EFFISSI_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+
+require_once EFFISSI_PLUGIN_DIR . 'includes/class-parsedown-loader.php';
+require_once EFFISSI_PLUGIN_DIR . 'includes/class-markdown-parser.php';
+require_once EFFISSI_PLUGIN_DIR . 'includes/class-gutenberg-converter.php';
+require_once EFFISSI_PLUGIN_DIR . 'includes/class-image-importer.php';
+require_once EFFISSI_PLUGIN_DIR . 'includes/class-upload-validator.php';
+require_once EFFISSI_PLUGIN_DIR . 'includes/class-importer.php';
 
 /**
- * Classe principale du plugin
+ * Classe principale : page d'outil et point d'entrée AJAX.
  */
-class EffiSimplyScrapperImporter {
-    
-    private static $instance = null;
-    
-    /**
-     * Singleton
-     */
-    public static function get_instance() {
-        if (null === self::$instance) {
-            self::$instance = new self();
-        }
-        return self::$instance;
-    }
-    
-    /**
-     * Constructeur
-     */
-    private function __construct() {
-        $this->load_dependencies();
-        $this->init_hooks();
-    }
-    
-    /**
-     * Charger les dépendances
-     */
-    private function load_dependencies() {
-        require_once EFFISSI_PLUGIN_DIR . 'includes/class-parsedown-loader.php';
-        require_once EFFISSI_PLUGIN_DIR . 'includes/class-markdown-parser.php';
-        require_once EFFISSI_PLUGIN_DIR . 'includes/class-gutenberg-converter.php';
-        require_once EFFISSI_PLUGIN_DIR . 'includes/class-importer.php';
-    }
-    
-    /**
-     * Initialiser les hooks
-     */
-    private function init_hooks() {
-        add_action('admin_menu', array($this, 'add_admin_menu'));
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
-        add_action('wp_ajax_effissi_import_file', array($this, 'ajax_import_file'));
-    }
-    
-    /**
-     * Ajouter le menu d'administration
-     */
-    public function add_admin_menu() {
-        add_management_page(
-            __('SimplyScrapper Importer', 'effisimplyscrapper'),
-            __('SimplyScrapper Importer', 'effisimplyscrapper'),
-            'manage_options',
-            'effissi-importer',
-            array($this, 'render_admin_page')
-        );
-    }
-    
-    /**
-     * Charger les assets (CSS/JS)
-     */
-    public function enqueue_admin_assets($hook) {
-        if ('tools_page_effissi-importer' !== $hook) {
-            return;
-        }
-        
-        wp_enqueue_style(
-            'effissi-admin-style',
-            EFFISSI_PLUGIN_URL . 'assets/css/admin.css',
-            array(),
-            EFFISSI_VERSION
-        );
-        
-        wp_enqueue_script(
-            'effissi-admin-script',
-            EFFISSI_PLUGIN_URL . 'assets/js/admin.js',
-            array('jquery'),
-            EFFISSI_VERSION,
-            true
-        );
-        
-        wp_localize_script('effissi-admin-script', 'effissiAjax', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('effissi_import_nonce'),
-            'strings' => array(
-                'processing' => __('Traitement du fichier', 'effisimplyscrapper'),
-                'of' => __('sur', 'effisimplyscrapper'),
-                'completed' => __('Import terminé !', 'effisimplyscrapper'),
-                'error' => __('Erreur', 'effisimplyscrapper'),
-                'success' => __('articles importés avec succès', 'effisimplyscrapper'),
-                'failed' => __('échecs', 'effisimplyscrapper')
-            )
-        ));
-    }
-    
-    /**
-     * Afficher la page d'administration
-     */
-    public function render_admin_page() {
-        ?>
-        <div class="wrap effissi-admin-wrap">
-            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-            
-            <div class="effissi-card">
-                <form id="effissi-import-form" enctype="multipart/form-data">
-                    
-                    <div class="effissi-form-group">
-                        <label for="effissi-files">
-                            <strong><?php _e('Fichiers Markdown (.md)', 'effisimplyscrapper'); ?></strong>
-                        </label>
-                        <input 
-                            type="file" 
-                            id="effissi-files" 
-                            name="effissi_files[]" 
-                            accept=".md" 
-                            multiple 
-                            required
-                        />
-                        <p class="description">
-                            <?php _e('Sélectionnez un ou plusieurs fichiers .md à importer', 'effisimplyscrapper'); ?>
-                        </p>
-                    </div>
-                    
-                    <div class="effissi-form-group">
-                        <label>
-                            <strong><?php _e('Statut des articles', 'effisimplyscrapper'); ?></strong>
-                        </label>
-                        <div class="effissi-radio-group">
-                            <label>
-                                <input type="radio" name="post_status" value="draft" checked>
-                                <?php _e('Brouillon', 'effisimplyscrapper'); ?>
-                            </label>
-                            <label>
-                                <input type="radio" name="post_status" value="publish">
-                                <?php _e('Publié', 'effisimplyscrapper'); ?>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="effissi-form-group">
-                        <label>
-                            <input type="checkbox" name="attach_images" id="effissi-attach-images" value="1">
-                            <?php _e('Rattacher les photos par numérotation', 'effisimplyscrapper'); ?>
-                        </label>
-                        <p class="description">
-                            <?php _e('Si le slug contient un numéro (ex: mon-article-c123), cherche une image 123.jpg dans la bibliothèque média et la définit comme image à la une.', 'effisimplyscrapper'); ?>
-                        </p>
-                    </div>
-                    
-                    <div class="effissi-form-group">
-                        <button type="submit" class="button button-primary button-large" id="effissi-import-btn">
-                            <?php _e('Importer', 'effisimplyscrapper'); ?>
-                        </button>
-                    </div>
-                    
-                </form>
-                
-                <div id="effissi-progress-container" style="display:none;">
-                    <div class="effissi-progress-info">
-                        <span id="effissi-progress-text"><?php _e('Préparation...', 'effisimplyscrapper'); ?></span>
-                    </div>
-                    <div class="effissi-progress-bar">
-                        <div class="effissi-progress-fill" id="effissi-progress-fill"></div>
-                    </div>
-                    <div class="effissi-progress-stats" id="effissi-progress-stats"></div>
-                </div>
-                
-                <div id="effissi-results" style="display:none;"></div>
-            </div>
-        </div>
-        <?php
-    }
-    
-    /**
-     * Handler AJAX pour l'import d'un fichier
-     */
-    public function ajax_import_file() {
-        check_ajax_referer('effissi_import_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => __('Permission refusée', 'effisimplyscrapper')));
-        }
-        
-        if (!isset($_FILES['file']) || !isset($_POST['post_status'])) {
-            wp_send_json_error(array('message' => __('Données manquantes', 'effisimplyscrapper')));
-        }
-        
-        $file = $_FILES['file'];
-        $post_status = sanitize_text_field($_POST['post_status']);
-        $attach_images = isset($_POST['attach_images']) && $_POST['attach_images'] === '1';
-        
-        if ($file['error'] !== UPLOAD_ERR_OK) {
-            wp_send_json_error(array('message' => __('Erreur lors du téléversement', 'effisimplyscrapper')));
-        }
-        
-        // Vérifier l'extension
-        $file_ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        if ($file_ext !== 'md') {
-            wp_send_json_error(array('message' => __('Format de fichier invalide', 'effisimplyscrapper')));
-        }
-        
-        try {
-            $importer = new EFFISSI_Importer();
-            $result = $importer->import_file($file['tmp_name'], $post_status, $attach_images);
-            
-            if ($result['success']) {
-                wp_send_json_success($result);
-            } else {
-                wp_send_json_error($result);
-            }
-            
-        } catch (Exception $e) {
-            wp_send_json_error(array(
-                'message' => $e->getMessage()
-            ));
-        }
-    }
+final class EFFISSI_Plugin {
+
+	/** Slug de la page d'outil. */
+	const PAGE_SLUG = 'effissi-importer';
+
+	/** Action AJAX et action du nonce. */
+	const AJAX_ACTION = 'effissi_import_file';
+	const NONCE       = 'effissi_import_nonce';
+
+	/** @var EFFISSI_Plugin|null */
+	private static $instance = null;
+
+	/**
+	 * @return EFFISSI_Plugin
+	 */
+	public static function get_instance() {
+		if ( null === self::$instance ) {
+			self::$instance = new self();
+		}
+
+		return self::$instance;
+	}
+
+	private function __construct() {
+		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
+		add_action( 'wp_ajax_' . self::AJAX_ACTION, array( $this, 'ajax_import_file' ) );
+	}
+
+	/**
+	 * Capacité requise pour utiliser l'outil.
+	 *
+	 * @return string
+	 */
+	public static function capability() {
+		/**
+		 * Capacité requise pour accéder à l'importeur (manage_options par défaut).
+		 *
+		 * @param string $capability Capacité.
+		 */
+		return (string) apply_filters( 'effissi_required_capability', 'manage_options' );
+	}
+
+	public function add_admin_menu() {
+		add_management_page(
+			__( 'SimplyScrapper Importer', 'effi-simple-scrapper-importer' ),
+			__( 'SimplyScrapper Importer', 'effi-simple-scrapper-importer' ),
+			self::capability(),
+			self::PAGE_SLUG,
+			array( $this, 'render_admin_page' )
+		);
+	}
+
+	/**
+	 * @param string $hook Page d'administration courante.
+	 */
+	public function enqueue_admin_assets( $hook ) {
+		if ( 'tools_page_' . self::PAGE_SLUG !== $hook ) {
+			return;
+		}
+
+		wp_enqueue_style( 'effissi-admin', EFFISSI_PLUGIN_URL . 'assets/css/admin.css', array(), EFFISSI_VERSION );
+		wp_enqueue_script( 'effissi-admin', EFFISSI_PLUGIN_URL . 'assets/js/admin.js', array( 'jquery' ), EFFISSI_VERSION, true );
+
+		$max_file_size = EFFISSI_Upload_Validator::max_file_size();
+
+		wp_localize_script(
+			'effissi-admin',
+			'effissiAjax',
+			array(
+				'ajaxUrl'          => admin_url( 'admin-ajax.php' ),
+				'action'           => self::AJAX_ACTION,
+				'nonce'            => wp_create_nonce( self::NONCE ),
+				'maxFileSize'      => $max_file_size,
+				'maxFileSizeLabel' => size_format( $max_file_size ),
+				'strings'          => array(
+					/* translators: 1: rang du fichier, 2: nombre de fichiers, 3: nom du fichier */
+					'processing'   => __( 'Traitement du fichier %1$s sur %2$s : %3$s', 'effi-simple-scrapper-importer' ),
+					'starting'     => __( 'Démarrage de l\'import...', 'effi-simple-scrapper-importer' ),
+					'running'      => __( 'Import en cours...', 'effi-simple-scrapper-importer' ),
+					'submit'       => __( 'Importer', 'effi-simple-scrapper-importer' ),
+					'completed'    => __( 'Import terminé.', 'effi-simple-scrapper-importer' ),
+					'noFile'       => __( 'Veuillez sélectionner au moins un fichier .md.', 'effi-simple-scrapper-importer' ),
+					'oneFile'      => __( '1 fichier sélectionné', 'effi-simple-scrapper-importer' ),
+					/* translators: %s: nombre de fichiers */
+					'manyFiles'    => __( '%s fichiers sélectionnés', 'effi-simple-scrapper-importer' ),
+					'badExtension' => __( 'Extension refusée : seuls les fichiers .md sont acceptés.', 'effi-simple-scrapper-importer' ),
+					/* translators: %s: taille maximale */
+					'tooBig'       => __( 'Fichier trop volumineux (maximum %s).', 'effi-simple-scrapper-importer' ),
+					'emptyFile'    => __( 'Fichier vide.', 'effi-simple-scrapper-importer' ),
+					'timeout'      => __( 'Délai dépassé : le serveur n\'a pas répondu à temps.', 'effi-simple-scrapper-importer' ),
+					'forbidden'    => __( 'Session expirée ou droits insuffisants : rechargez la page.', 'effi-simple-scrapper-importer' ),
+					'unexpected'   => __( 'Réponse inattendue du serveur (consultez le journal PHP).', 'effi-simple-scrapper-importer' ),
+					'network'      => __( 'Erreur réseau', 'effi-simple-scrapper-importer' ),
+					'unknown'      => __( 'Erreur inconnue', 'effi-simple-scrapper-importer' ),
+					/* translators: 1: traités, 2: total, 3: importés, 4: ignorés, 5: échecs */
+					'stats'        => __( 'Progression : %1$s / %2$s · importés : %3$s · ignorés : %4$s · échecs : %5$s', 'effi-simple-scrapper-importer' ),
+					'titleOk'      => __( 'Import terminé', 'effi-simple-scrapper-importer' ),
+					'titlePartial' => __( 'Import terminé avec des fichiers ignorés ou en échec', 'effi-simple-scrapper-importer' ),
+					'titleError'   => __( 'Échec de l\'import', 'effi-simple-scrapper-importer' ),
+					'imported'     => __( 'Importé', 'effi-simple-scrapper-importer' ),
+					'skipped'      => __( 'Ignoré', 'effi-simple-scrapper-importer' ),
+					'failed'       => __( 'Échec', 'effi-simple-scrapper-importer' ),
+					'edit'         => __( 'Modifier', 'effi-simple-scrapper-importer' ),
+				),
+			)
+		);
+	}
+
+	public function render_admin_page() {
+		if ( ! current_user_can( self::capability() ) ) {
+			wp_die( esc_html__( 'Vous n\'avez pas les droits suffisants pour accéder à cette page.', 'effi-simple-scrapper-importer' ) );
+		}
+
+		$can_publish = current_user_can( 'publish_posts' );
+		$can_upload  = current_user_can( 'upload_files' );
+		?>
+		<div class="wrap effissi-admin-wrap">
+			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+
+			<div class="notice notice-info inline">
+				<p><?php esc_html_e( 'N\'importez que des contenus et des images que vous avez le droit de réutiliser (vos propres sites, contenus sous licence ou avec l\'autorisation écrite de leur auteur).', 'effi-simple-scrapper-importer' ); ?></p>
+			</div>
+
+			<noscript>
+				<div class="notice notice-error inline"><p><?php esc_html_e( 'JavaScript est nécessaire pour utiliser l\'importeur.', 'effi-simple-scrapper-importer' ); ?></p></div>
+			</noscript>
+
+			<div class="effissi-card">
+				<form id="effissi-import-form" enctype="multipart/form-data">
+
+					<div class="effissi-form-group">
+						<label for="effissi-files"><strong><?php esc_html_e( 'Fichiers Markdown (.md)', 'effi-simple-scrapper-importer' ); ?></strong></label>
+						<input type="file" id="effissi-files" name="effissi_files[]" accept=".md,text/markdown" multiple required />
+						<p class="description">
+							<?php
+							printf(
+								/* translators: %s: taille maximale */
+								esc_html__( 'Un ou plusieurs fichiers .md encodés en UTF-8, traités l\'un après l\'autre. Taille maximale par fichier : %s.', 'effi-simple-scrapper-importer' ),
+								esc_html( size_format( EFFISSI_Upload_Validator::max_file_size() ) )
+							);
+							?>
+						</p>
+					</div>
+
+					<fieldset class="effissi-form-group">
+						<legend><strong><?php esc_html_e( 'Statut des articles', 'effi-simple-scrapper-importer' ); ?></strong></legend>
+						<div class="effissi-radio-group">
+							<label><input type="radio" name="post_status" value="draft" checked /> <?php esc_html_e( 'Brouillon', 'effi-simple-scrapper-importer' ); ?></label>
+							<label><input type="radio" name="post_status" value="pending" /> <?php esc_html_e( 'En attente de relecture', 'effi-simple-scrapper-importer' ); ?></label>
+							<?php if ( $can_publish ) : ?>
+								<label><input type="radio" name="post_status" value="publish" /> <?php esc_html_e( 'Publié', 'effi-simple-scrapper-importer' ); ?></label>
+							<?php endif; ?>
+						</div>
+					</fieldset>
+
+					<fieldset class="effissi-form-group">
+						<legend><strong><?php esc_html_e( 'Si le slug existe déjà', 'effi-simple-scrapper-importer' ); ?></strong></legend>
+						<label class="effissi-block-label"><input type="radio" name="duplicates" value="skip" checked /> <?php esc_html_e( 'Ignorer le fichier et le signaler (recommandé)', 'effi-simple-scrapper-importer' ); ?></label>
+						<label class="effissi-block-label"><input type="radio" name="duplicates" value="import" /> <?php esc_html_e( 'Importer quand même et le signaler (WordPress ajoutera un suffixe au slug à la publication)', 'effi-simple-scrapper-importer' ); ?></label>
+					</fieldset>
+
+					<div class="effissi-form-group">
+						<label class="effissi-block-label">
+							<input type="checkbox" name="featured_by_number" id="effissi-featured-by-number" value="1" />
+							<?php esc_html_e( 'Rattacher l\'image à la une par numérotation', 'effi-simple-scrapper-importer' ); ?>
+						</label>
+						<p class="description"><?php esc_html_e( 'Si le slug se termine par un numéro (ex. : mon-article-c123), l\'image 123.jpg (ou .jpeg, .png, .gif, .webp, .avif) déjà présente dans la médiathèque devient l\'image à la une.', 'effi-simple-scrapper-importer' ); ?></p>
+					</div>
+
+					<div class="effissi-form-group">
+						<label class="effissi-block-label">
+							<input type="checkbox" name="import_images" id="effissi-import-images" value="1" <?php disabled( ! $can_upload ); ?> />
+							<?php esc_html_e( 'Importer les images dans la médiathèque', 'effi-simple-scrapper-importer' ); ?>
+						</label>
+						<p class="description">
+							<?php
+							printf(
+								/* translators: 1: nombre maximal d'images, 2: taille maximale */
+								esc_html__( 'Décoché (par défaut), les images restent chargées depuis le site source. Coché, jusqu\'à %1$s images JPEG, PNG, GIF, WebP ou AVIF par article (%2$s maximum chacune) sont copiées dans la médiathèque ; les autres restent liées au site source.', 'effi-simple-scrapper-importer' ),
+								esc_html( number_format_i18n( EFFISSI_Image_Importer::max_images() ) ),
+								esc_html( size_format( EFFISSI_Image_Importer::max_bytes() ) )
+							);
+							?>
+						</p>
+					</div>
+
+					<div class="effissi-form-group">
+						<button type="submit" class="button button-primary button-large" id="effissi-import-btn"><?php esc_html_e( 'Importer', 'effi-simple-scrapper-importer' ); ?></button>
+					</div>
+				</form>
+
+				<div id="effissi-progress-container" hidden>
+					<div class="effissi-progress-info"><span id="effissi-progress-text"></span></div>
+					<div class="effissi-progress-bar"><div class="effissi-progress-fill" id="effissi-progress-fill"></div></div>
+					<div class="effissi-progress-stats" id="effissi-progress-stats" aria-live="polite"></div>
+				</div>
+
+				<div id="effissi-results" hidden></div>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Point d'entrée AJAX : importe un fichier par requête (le navigateur
+	 * envoie les fichiers l'un après l'autre).
+	 */
+	public function ajax_import_file() {
+		check_ajax_referer( self::NONCE, 'nonce' );
+
+		if ( ! current_user_can( self::capability() ) || ! current_user_can( 'edit_posts' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission refusée.', 'effi-simple-scrapper-importer' ) ), 403 );
+		}
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- entrée de téléversement validée par EFFISSI_Upload_Validator.
+		$file = isset( $_FILES['file'] ) && is_array( $_FILES['file'] ) ? $_FILES['file'] : array();
+		$tmp  = '';
+
+		try {
+			$validator = new EFFISSI_Upload_Validator();
+			$tmp       = $validator->validate( $file );
+
+			$importer = new EFFISSI_Importer();
+			$options  = $importer->normalize_options(
+				array(
+					'post_status'        => self::post_key( 'post_status', 'draft' ),
+					'duplicates'         => self::post_key( 'duplicates', 'skip' ),
+					'featured_by_number' => '1' === self::post_key( 'featured_by_number', '0' ),
+					'import_images'      => '1' === self::post_key( 'import_images', '0' ),
+				)
+			);
+
+			$result = $importer->import_file( $tmp, $options );
+		} catch ( Throwable $e ) {
+			$this->delete_temp_file( $tmp );
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+
+		$this->delete_temp_file( $tmp );
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * Lit un champ POST simple (clé alphanumérique), le nonce ayant été vérifié.
+	 *
+	 * @param string $key     Nom du champ.
+	 * @param string $default Valeur par défaut.
+	 * @return string
+	 */
+	private static function post_key( $key, $default ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce vérifié dans ajax_import_file().
+		if ( ! isset( $_POST[ $key ] ) || ! is_string( $_POST[ $key ] ) ) {
+			return $default;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce vérifié dans ajax_import_file().
+		return sanitize_key( wp_unslash( $_POST[ $key ] ) );
+	}
+
+	/**
+	 * Supprime le fichier temporaire téléversé.
+	 *
+	 * @param string $path Chemin.
+	 */
+	private function delete_temp_file( $path ) {
+		if ( '' !== $path && is_file( $path ) ) {
+			wp_delete_file( $path );
+		}
+	}
 }
 
-// Initialiser le plugin
+/*
+ * Compatibilité : ancien nom de la classe principale (versions <= 1.0.2).
+ */
+class_alias( 'EFFISSI_Plugin', 'EffiSimplyScrapperImporter' );
+
+/**
+ * Démarre l'extension (administration et requêtes AJAX uniquement).
+ *
+ * @return EFFISSI_Plugin|null
+ */
 function effissi_init() {
-    return EffiSimplyScrapperImporter::get_instance();
+	if ( ! is_admin() ) {
+		return null;
+	}
+
+	return EFFISSI_Plugin::get_instance();
 }
-add_action('plugins_loaded', 'effissi_init');
-
-/**
- * Activation du plugin
- */
-register_activation_hook(__FILE__, function() {
-    // Créer le dossier des assets si nécessaire
-    $upload_dir = wp_upload_dir();
-    $effissi_dir = $upload_dir['basedir'] . '/effisimplyscrapper';
-    
-    if (!file_exists($effissi_dir)) {
-        wp_mkdir_p($effissi_dir);
-    }
-});
-
-/**
- * Désactivation du plugin
- */
-register_deactivation_hook(__FILE__, function() {
-    // Nettoyage si nécessaire
-});
+add_action( 'plugins_loaded', 'effissi_init' );

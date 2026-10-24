@@ -1,291 +1,294 @@
 /**
- * FICHIER: assets/js/admin.js
- * Gestion de l'import asynchrone avec AJAX et barre de progression
+ * effiSimplyScrapperImporter : import des fichiers un par un (une requête
+ * AJAX par fichier), barre de progression et compte rendu.
  */
+(function ($) {
+	'use strict';
 
-(function($) {
-    'use strict';
-    
-    let isProcessing = false;
-    let totalFiles = 0;
-    let processedFiles = 0;
-    let successCount = 0;
-    let errorCount = 0;
-    let errors = [];
-    
-    /**
-     * Initialisation
-     */
-    $(document).ready(function() {
-        $('#effissi-import-form').on('submit', handleFormSubmit);
-        
-        // Afficher le nombre de fichiers sélectionnés
-        $('#effissi-files').on('change', function() {
-            const fileCount = this.files.length;
-            if (fileCount > 0) {
-                const text = fileCount === 1 
-                    ? '1 fichier sélectionné' 
-                    : fileCount + ' fichiers sélectionnés';
-                
-                if (!$('#effissi-file-count').length) {
-                    $(this).after('<p id="effissi-file-count" class="description" style="margin-top: 8px; font-weight: 600; color: #2271b1;"></p>');
-                }
-                $('#effissi-file-count').text(text);
-            } else {
-                $('#effissi-file-count').remove();
-            }
-        });
-    });
-    
-    /**
-     * Gérer la soumission du formulaire
-     */
-    function handleFormSubmit(e) {
-        e.preventDefault();
-        
-        if (isProcessing) {
-            return;
-        }
-        
-        const files = $('#effissi-files')[0].files;
-        const postStatus = $('input[name="post_status"]:checked').val();
-        const attachImages = $('#effissi-attach-images').is(':checked');
-        
-        if (files.length === 0) {
-            alert('Veuillez sélectionner au moins un fichier.');
-            return;
-        }
-        
-        // Réinitialiser les compteurs
-        totalFiles = files.length;
-        processedFiles = 0;
-        successCount = 0;
-        errorCount = 0;
-        errors = [];
-        
-        // Préparer l'interface
-        startImport();
-        
-        // Traiter les fichiers un par un
-        processFilesSequentially(files, postStatus, attachImages);
-    }
-    
-    /**
-     * Préparer l'interface pour l'import
-     */
-    function startImport() {
-        isProcessing = true;
-        
-        // Désactiver le formulaire
-        $('#effissi-import-btn').prop('disabled', true).text('Import en cours...');
-        $('#effissi-files').prop('disabled', true);
-        $('input[name="post_status"]').prop('disabled', true);
-        $('#effissi-attach-images').prop('disabled', true);
-        
-        // Afficher la barre de progression
-        $('#effissi-progress-container').slideDown();
-        $('#effissi-results').hide();
-        
-        updateProgress(0, 'Démarrage de l\'import...');
-    }
-    
-    /**
-     * Traiter les fichiers séquentiellement (un par un)
-     */
-    function processFilesSequentially(files, postStatus, attachImages) {
-        const filesArray = Array.from(files);
-        
-        // Fonction récursive pour traiter chaque fichier
-        function processNext(index) {
-            if (index >= filesArray.length) {
-                // Tous les fichiers ont été traités
-                finishImport();
-                return;
-            }
-            
-            const file = filesArray[index];
-            const fileName = file.name;
-            
-            updateProgress(
-                (index / totalFiles) * 100,
-                effissiAjax.strings.processing + ' ' + (index + 1) + ' ' + 
-                effissiAjax.strings.of + ' ' + totalFiles + ': ' + fileName
-            );
-            
-            // Envoyer le fichier via AJAX
-            importSingleFile(file, postStatus, attachImages)
-                .then(function(response) {
-                    processedFiles++;
-                    
-                    if (response.success) {
-                        successCount++;
-                    } else {
-                        errorCount++;
-                        errors.push({
-                            file: fileName,
-                            message: response.data.message || 'Erreur inconnue'
-                        });
-                    }
-                    
-                    // Mettre à jour les stats
-                    updateStats();
-                    
-                    // Traiter le fichier suivant
-                    processNext(index + 1);
-                })
-                .catch(function(error) {
-                    processedFiles++;
-                    errorCount++;
-                    errors.push({
-                        file: fileName,
-                        message: error.message || 'Erreur réseau'
-                    });
-                    
-                    updateStats();
-                    processNext(index + 1);
-                });
-        }
-        
-        // Démarrer le traitement
-        processNext(0);
-    }
-    
-    /**
-     * Importer un seul fichier via AJAX
-     */
-    function importSingleFile(file, postStatus, attachImages) {
-        return new Promise(function(resolve, reject) {
-            const formData = new FormData();
-            formData.append('action', 'effissi_import_file');
-            formData.append('nonce', effissiAjax.nonce);
-            formData.append('file', file);
-            formData.append('post_status', postStatus);
-            formData.append('attach_images', attachImages ? '1' : '0');
-            
-            $.ajax({
-                url: effissiAjax.ajax_url,
-                type: 'POST',
-                data: formData,
-                processData: false,
-                contentType: false,
-                timeout: 60000, // 60 secondes max par fichier
-                success: function(response) {
-                    resolve(response);
-                },
-                error: function(xhr, status, error) {
-                    reject(new Error(error));
-                }
-            });
-        });
-    }
-    
-    /**
-     * Mettre à jour la barre de progression
-     */
-    function updateProgress(percentage, text) {
-        const roundedPercentage = Math.round(percentage);
-        $('#effissi-progress-fill').css('width', roundedPercentage + '%');
-        $('#effissi-progress-text').text(text);
-    }
-    
-    /**
-     * Mettre à jour les statistiques
-     */
-    function updateStats() {
-        const statsHtml = 
-            '<strong>Progression:</strong> ' + processedFiles + ' / ' + totalFiles + ' | ' +
-            '<span style="color: #00a32a;">✓ ' + successCount + ' réussis</span> | ' +
-            '<span style="color: #d63638;">✗ ' + errorCount + ' échecs</span>';
-        
-        $('#effissi-progress-stats').html(statsHtml);
-    }
-    
-    /**
-     * Terminer l'import et afficher les résultats
-     */
-    function finishImport() {
-        isProcessing = false;
-        
-        // Mettre à jour la progression à 100%
-        updateProgress(100, effissiAjax.strings.completed);
-        
-        // Afficher les résultats
-        setTimeout(function() {
-            displayResults();
-            resetForm();
-        }, 500);
-    }
-    
-    /**
-     * Afficher les résultats finaux
-     */
-    function displayResults() {
-        let resultClass = 'success';
-        let resultTitle = 'Import terminé avec succès !';
-        
-        if (errorCount > 0 && successCount > 0) {
-            resultClass = 'partial';
-            resultTitle = 'Import terminé avec des erreurs';
-        } else if (errorCount > 0 && successCount === 0) {
-            resultClass = 'error';
-            resultTitle = 'Échec de l\'import';
-        }
-        
-        let html = '<h3>' + resultTitle + '</h3>';
-        html += '<p><strong>' + successCount + '</strong> ' + effissiAjax.strings.success;
-        
-        if (errorCount > 0) {
-            html += ' | <strong>' + errorCount + '</strong> ' + effissiAjax.strings.failed;
-        }
-        
-        html += '</p>';
-        
-        // Afficher les erreurs si présentes
-        if (errors.length > 0) {
-            html += '<details style="margin-top: 15px;">';
-            html += '<summary style="cursor: pointer; font-weight: 600; margin-bottom: 10px;">Voir les erreurs</summary>';
-            html += '<ul style="margin: 10px 0 0 20px;">';
-            
-            errors.forEach(function(error) {
-                html += '<li style="margin-bottom: 5px;">';
-                html += '<strong>' + escapeHtml(error.file) + ':</strong> ' + escapeHtml(error.message);
-                html += '</li>';
-            });
-            
-            html += '</ul>';
-            html += '</details>';
-        }
-        
-        $('#effissi-results')
-            .removeClass('success error partial')
-            .addClass(resultClass)
-            .html(html)
-            .slideDown();
-    }
-    
-    /**
-     * Réinitialiser le formulaire
-     */
-    function resetForm() {
-        $('#effissi-import-btn').prop('disabled', false).text('Importer');
-        $('#effissi-files').prop('disabled', false).val('');
-        $('input[name="post_status"]').prop('disabled', false);
-        $('#effissi-attach-images').prop('disabled', false);
-        $('#effissi-file-count').remove();
-        
-        // Masquer la barre de progression après 2 secondes
-        setTimeout(function() {
-            $('#effissi-progress-container').slideUp();
-        }, 2000);
-    }
-    
-    /**
-     * Échapper le HTML pour éviter les injections XSS
-     */
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
+	var config = window.effissiAjax || {};
+	var strings = config.strings || {};
+	var isProcessing = false;
+	var stats = null;
+
+	$(function () {
+		$('#effissi-import-form').on('submit', handleFormSubmit);
+		$('#effissi-files').on('change', updateFileCount);
+	});
+
+	/**
+	 * Remplace %s et %1$s, %2$s... par les arguments.
+	 */
+	function format(template) {
+		var args = Array.prototype.slice.call(arguments, 1);
+		var index = 0;
+
+		return String(template || '').replace(/%(?:(\d+)\$)?s/g, function (match, position) {
+			var value = position ? args[parseInt(position, 10) - 1] : args[index++];
+			return value === undefined ? '' : String(value);
+		});
+	}
+
+	function updateFileCount() {
+		var count = this.files ? this.files.length : 0;
+		var $count = $('#effissi-file-count');
+
+		if (!count) {
+			$count.remove();
+			return;
+		}
+
+		if (!$count.length) {
+			$count = $('<p id="effissi-file-count" class="description effissi-file-count"></p>');
+			$(this).after($count);
+		}
+
+		$count.text(count === 1 ? strings.oneFile : format(strings.manyFiles, count));
+	}
+
+	function handleFormSubmit(event) {
+		event.preventDefault();
+
+		if (isProcessing) {
+			return;
+		}
+
+		var input = $('#effissi-files')[0];
+		var files = input && input.files ? Array.prototype.slice.call(input.files) : [];
+
+		if (!files.length) {
+			window.alert(strings.noFile);
+			return;
+		}
+
+		var options = {
+			post_status: $('input[name="post_status"]:checked').val() || 'draft',
+			duplicates: $('input[name="duplicates"]:checked').val() || 'skip',
+			featured_by_number: $('#effissi-featured-by-number').is(':checked') ? '1' : '0',
+			import_images: $('#effissi-import-images').is(':checked') ? '1' : '0'
+		};
+
+		stats = { total: files.length, processed: 0, imported: 0, skipped: 0, failed: 0, items: [] };
+
+		startImport();
+		processNext(files, options, 0);
+	}
+
+	/**
+	 * Désactive le formulaire pendant l'import, puis ne réactive que les champs
+	 * désactivés ici (l'option images reste grisée sans droit de téléversement).
+	 */
+	function setFormDisabled(disabled) {
+		var $fields = $('#effissi-import-form').find('input, button');
+
+		if (disabled) {
+			$fields.filter(':not(:disabled)').attr('data-effissi-locked', '1').prop('disabled', true);
+		} else {
+			$fields.filter('[data-effissi-locked]').removeAttr('data-effissi-locked').prop('disabled', false);
+		}
+	}
+
+	function startImport() {
+		isProcessing = true;
+		setFormDisabled(true);
+		$('#effissi-import-btn').text(strings.running);
+		$('#effissi-results').prop('hidden', true).empty();
+		$('#effissi-progress-container').prop('hidden', false);
+		updateProgress(0, strings.starting);
+		updateStats();
+	}
+
+	function processNext(files, options, index) {
+		if (index >= files.length) {
+			finishImport();
+			return;
+		}
+
+		var file = files[index];
+
+		updateProgress((index / stats.total) * 100, format(strings.processing, index + 1, stats.total, file.name));
+
+		var done = function (item) {
+			stats.processed++;
+			stats[item.state]++;
+			stats.items.push(item);
+			updateStats();
+			processNext(files, options, index + 1);
+		};
+
+		var localError = checkFileLocally(file);
+
+		if (localError) {
+			done({ state: 'failed', file: file.name, message: localError, warnings: [] });
+			return;
+		}
+
+		importSingleFile(file, options).then(
+			function (response) {
+				done(normalizeResponse(file.name, response));
+			},
+			function (message) {
+				done({ state: 'failed', file: file.name, message: message, warnings: [] });
+			}
+		);
+	}
+
+	function checkFileLocally(file) {
+		if (!/\.md$/i.test(file.name)) {
+			return strings.badExtension;
+		}
+
+		if (!file.size) {
+			return strings.emptyFile;
+		}
+
+		if (config.maxFileSize && file.size > config.maxFileSize) {
+			return format(strings.tooBig, config.maxFileSizeLabel || '');
+		}
+
+		return '';
+	}
+
+	function importSingleFile(file, options) {
+		return new Promise(function (resolve, reject) {
+			var formData = new FormData();
+
+			formData.append('action', config.action);
+			formData.append('nonce', config.nonce);
+			formData.append('file', file);
+
+			Object.keys(options).forEach(function (key) {
+				formData.append(key, options[key]);
+			});
+
+			$.ajax({
+				url: config.ajaxUrl,
+				type: 'POST',
+				data: formData,
+				dataType: 'json',
+				processData: false,
+				contentType: false,
+				// Plus long quand les images sont téléchargées.
+				timeout: options.import_images === '1' ? 300000 : 60000
+			}).done(function (response) {
+				resolve(response);
+			}).fail(function (xhr, status, error) {
+				// wp_send_json_error() avec un code HTTP (403...) arrive ici avec un JSON exploitable.
+				if (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+					reject(xhr.responseJSON.data.message);
+				} else if (status === 'timeout') {
+					reject(strings.timeout);
+				} else if (xhr.status === 403 || xhr.responseText === '-1' || xhr.responseText === '0') {
+					reject(strings.forbidden);
+				} else if (status === 'parsererror') {
+					reject(strings.unexpected);
+				} else {
+					reject(strings.network + (error ? ' : ' + error : ''));
+				}
+			});
+		});
+	}
+
+	function normalizeResponse(fileName, response) {
+		if (!response || typeof response !== 'object') {
+			return { state: 'failed', file: fileName, message: strings.unexpected, warnings: [] };
+		}
+
+		var data = response.data || {};
+
+		if (!response.success) {
+			return { state: 'failed', file: fileName, message: data.message || strings.unknown, warnings: [] };
+		}
+
+		return {
+			state: data.status === 'skipped' ? 'skipped' : 'imported',
+			file: fileName,
+			message: data.message || '',
+			editUrl: typeof data.edit_url === 'string' ? data.edit_url : '',
+			warnings: Array.isArray(data.warnings) ? data.warnings : []
+		};
+	}
+
+	function updateProgress(percentage, text) {
+		var rounded = Math.max(0, Math.min(100, Math.round(percentage)));
+
+		$('#effissi-progress-fill').css('width', rounded + '%');
+		$('#effissi-progress-text').text(text);
+	}
+
+	function updateStats() {
+		$('#effissi-progress-stats').text(
+			format(strings.stats, stats.processed, stats.total, stats.imported, stats.skipped, stats.failed)
+		);
+	}
+
+	function finishImport() {
+		isProcessing = false;
+		updateProgress(100, strings.completed);
+		displayResults();
+		resetForm();
+	}
+
+	function displayResults() {
+		var resultClass = 'success';
+		var title = strings.titleOk;
+
+		if (stats.failed > 0 && stats.imported === 0) {
+			resultClass = 'error';
+			title = strings.titleError;
+		} else if (stats.failed > 0 || stats.skipped > 0) {
+			resultClass = 'partial';
+			title = strings.titlePartial;
+		}
+
+		var $results = $('#effissi-results');
+		var $list = $('<ul class="effissi-result-list"></ul>');
+		var labels = { imported: strings.imported, skipped: strings.skipped, failed: strings.failed };
+
+		stats.items.forEach(function (item) {
+			var $item = $('<li></li>').addClass('effissi-result-' + item.state);
+
+			$('<strong></strong>').text(labels[item.state] + ' · ' + item.file).appendTo($item);
+
+			if (item.message) {
+				$item.append(document.createTextNode(' : ' + item.message));
+			}
+
+			if (item.editUrl) {
+				$item.append(document.createTextNode(' '));
+				$('<a></a>').attr('href', item.editUrl).text(strings.edit).appendTo($item);
+			}
+
+			if (item.warnings.length) {
+				var $warnings = $('<ul class="effissi-warnings"></ul>');
+
+				item.warnings.forEach(function (warning) {
+					$('<li></li>').text(String(warning)).appendTo($warnings);
+				});
+
+				$item.append($warnings);
+			}
+
+			$list.append($item);
+		});
+
+		$results
+			.removeClass('success error partial')
+			.addClass(resultClass)
+			.empty()
+			.append($('<h3></h3>').text(title))
+			.append($('<p></p>').text(format(strings.stats, stats.processed, stats.total, stats.imported, stats.skipped, stats.failed)))
+			.append($list)
+			.prop('hidden', false);
+	}
+
+	function resetForm() {
+		setFormDisabled(false);
+		$('#effissi-import-btn').text(strings.submit);
+		$('#effissi-files').val('');
+		$('#effissi-file-count').remove();
+
+		window.setTimeout(function () {
+			$('#effissi-progress-container').prop('hidden', true);
+		}, 2000);
+	}
 })(jQuery);
