@@ -1,69 +1,61 @@
-# [Article de test complet - Correction de l'importateur](https://example.com)
-_https://example.com/blog/article-test-correction-n105_
+# [Préparer une sortie à vélo en forêt](https://example.com/blog/preparer-une-sortie-a-velo-n42)
+_https://example.com/blog/preparer-une-sortie-a-velo-n42_
 
-## Introduction au test
+Ce fichier est un **exemple fictif** au format SimplyScrapper. Il contient du *texte inventé* et tous les éléments Markdown pris en charge, avec du `code en ligne` et un [lien d'exemple](https://example.com/guide).
 
-Ceci est un paragraphe d'introduction avec du **texte en gras**, du *texte en italique* et du ***texte en gras et italique***. Ce test permet de vérifier que tout le contenu est bien importé.
+## Avant de partir
 
-## Section avec listes
+Quelques vérifications simples :
 
-Voici une liste à puces pour tester les éléments non ordonnés :
-- Premier élément de la liste
-- Deuxième élément avec **formatage gras**
-- Troisième élément avec *formatage italique*
-- Quatrième élément avec un [lien externe](https://wordpress.org)
+- Gonfler les pneus à la bonne pression
+- Contrôler les freins
+  - patins ou plaquettes
+  - câbles et leviers
+- Emporter une **chambre à air** de rechange
 
-### Sous-section avec liste ordonnée
+### Les étapes du jour
 
-Et maintenant une liste numérotée pour tester les éléments ordonnés :
-1. Première étape du processus
-2. Deuxième étape importante
-3. Troisième étape finale
+1. Choisir un itinéraire adapté
+2. Prévenir un proche de l'heure de retour
+3. Partir tôt pour profiter de la fraîcheur
 
-## Section avec citation
+> Une bonne sortie se prépare la veille.
+> Le reste n'est qu'une question de rythme.
 
-Voici une citation importante à tester :
-
-> La simplicité est la sophistication suprême.
-> Cette citation devrait apparaître dans un bloc quote Gutenberg.
-
-## Section avec code
-
-Testons maintenant l'import de blocs de code :
+## Un peu de code
 
 ```php
 <?php
-// Code PHP de test
-function test_import() {
-    echo "Vérification de l'import de code";
-    return true;
+// Exemple fictif : [ce_code_court] ne doit pas être exécuté.
+function distance_totale( array $etapes ) {
+    return array_sum( $etapes ) . ' km & plus';
 }
 ```
 
-Voici également un `code inline` au milieu d'un paragraphe.
+## Tableau récapitulatif
 
-## Section avec séparateur
+| Matériel | Poids | Indispensable |
+|:---------|:-----:|--------------:|
+| Pompe    | 120 g | oui           |
+| Trousse  | 80 g  | oui           |
+| Thermos  | 350 g | non           |
 
-Le texte ci-dessus devrait être séparé du texte ci-dessous par une ligne horizontale.
+## Images
+
+![Chemin forestier au lever du jour](https://example.com/images/chemin-foret.jpg)
+
+[![Carte de l'itinéraire](https://example.com/images/carte.png)](https://example.com/carte)
+
+Une image relative au site source :
+
+![Profil du parcours](/images/profil-parcours.webp)
 
 ---
 
-Nous sommes maintenant après le séparateur.
+<div class="encadre">Un encadré en <strong>HTML brut</strong> devient un paragraphe.</div>
 
-## Section avec liens et images
-
-Voici un paragraphe contenant un [lien vers WordPress](https://wordpress.org) et une référence à une image (si vous avez une URL d'image, vous pouvez l'ajouter).
+<iframe src="https://example.com/embed/video-fictive"></iframe>
 
 ## Conclusion
 
-Ce fichier de test contient tous les éléments markdown principaux :
-- Titres de différents niveaux (H2, H3)
-- Paragraphes avec formatage inline
-- Listes ordonnées et non ordonnées
-- Citations
-- Blocs de code
-- Séparateurs
-- Liens
-
-Si tous ces éléments sont correctement importés en tant que blocs Gutenberg distincts, alors la correction fonctionne parfaitement !
-
+Si chaque élément ci-dessus apparaît dans un bloc natif distinct (titre, paragraphe, liste, citation, code, tableau, image, séparateur), la conversion fonctionne.
