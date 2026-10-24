@@ -1,0 +1,4 @@
+# Fins de ligne normalisées (LF dans le dépôt).
+* text=auto
+*.png binary
+*.jpg binary
